@@ -32,21 +32,45 @@ team_t team = {
     "",
     ""
 };
+/* header/footer size (bytes) */
+#define HFSIZE 4       
 
-/* single word (4) or double word (8) alignment */
-#define ALIGNMENT 8
+/* double word size (bytes) */
+#define DWORD 8
 
-/* rounds up to the nearest multiple of ALIGNMENT */
-#define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
+/* Default size to extend heap (bytes) */
+#define CHUNKSIZE (1<<12)
 
+/* Combines the size and allocated bit into a word (for the header/footer) */
+#define HF(size, alloc) ((size) | (alloc))
 
-#define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
+/* Read and write a word at address a */
+#define READ(a) (*(unsigned int *)(a))
+#define WRITE(a, val) (*(unsigned int *)(a) = (val))
+
+/* Read the size and allocation status of block at address a */
+#define GET_SIZE(a) (READ(a) & ~0x7)
+#define GET_ALLOC(a) (READ(a) & 0x1)
+
+/* Calculate address of given block's header/footer */
+#define HEAD(ptr) ((char *)(ptr) - WSIZE)
+#define FOOT(ptr) ((char *)(ptr) + GET_SIZE(HEAD(ptr)) - DSIZE)
+
+/* Calculate address of next/previous blocks */
+#define NEXT(ptr) ((char *)(ptr) + GET_SIZE(((char *)(ptr) - HFSIZE)))
+#define PREV(ptr) ((char *)(ptr) - GET_SIZE(((char *)(ptr) - DWORD)))
+
+/************************
+// /* rounds up to the nearest multiple of ALIGNMENT */
+// #define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
+// #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
+/************************
 
 /* 
  * mm_init - initialize the malloc package.
  */
 int mm_init(void)
-{
+{   
     return 0;
 }
 
@@ -93,16 +117,4 @@ void *mm_realloc(void *ptr, size_t size)
     return newptr;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+//Used example in CSAPP chapter 9.9 for reference.
