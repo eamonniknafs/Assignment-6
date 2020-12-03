@@ -118,10 +118,22 @@ void *mm_malloc(size_t size)
 }
 
 /*
- * mm_free - Freeing a block does nothing.
+ * mm_free - Frees a block.
+ *  - checks for bad entry
+ *  - gets size of block to be freed
+ *  - updates headers/footers so that block is unallocated
+ *  - coalesces
  */
 void mm_free(void *ptr)
 {
+    if (ptr == 0) return; //if pointer is NULL, return
+
+    size_t size = GET_SIZE(HEAD(ptr)); //get size of block to free
+    if (heapL == 0) mm_init(); //if no heap list, init
+
+    PUT(HEAD(ptr), HF(size, 0)); //set header to unallocated
+    PUT(FOOT(ptr), HF(size, 0)); //set footer to unallocated 
+    coalesce(ptr); //coalesce to optimize
 }
 
 /*
@@ -142,6 +154,51 @@ void *mm_realloc(void *ptr, size_t size)
     memcpy(newptr, oldptr, copySize);
     mm_free(oldptr);
     return newptr;
+}
+
+/*
+ * coalesce - Boundary coalescing. Returns pointer to coalesced block.
+ *  - checks if next/prev blocks are allocated
+ *  - runs different cases to coalesce depending on allocation
+ */
+static void *coalesce(void *ptr) 
+{
+    size_t prev_alloc = GET_ALLOC(FOOT(PREV(ptr)));
+    size_t next_alloc = GET_ALLOC(HEAD(NEXT(ptr)));
+    size_t size = GET_SIZE(HEAD(ptr));
+
+    /* if both previous and next allocated */
+    if (prev_alloc && next_alloc) {
+        return ptr;
+    }
+
+    /* if only next is allocated */
+    else if (!prev_alloc && next_alloc) {
+        size += GET_SIZE(HEAD(PREV(ptr)));
+        PUT(FOOT(ptr), HF(size, 0));
+        PUT(HEAD(PREV(ptr)), HF(size, 0));
+        ptr = PREV(bp);
+    }
+
+    /* if only previous is allocated */
+    else if (prev_alloc && !next_alloc) {
+        size += GET_SIZE(HEAD(NEXT(ptr)));
+        PUT(HEAD(ptr), HF(size, 0));
+        PUT(FOOT(bp), HF(size,0));
+    }
+
+    /* if neither is */
+    else {
+        size += GET_SIZE(HEAD(PREV(ptr))) + 
+            GET_SIZE(FOOT(NEXT(ptr)));
+        PUT(HEAD(PREV(ptr)), HF(size, 0));
+        PUT(HEAD(NEXT(ptr)), HF(size, 0));
+        ptr = PREV(ptr);
+    }
+   
+    if ((trav > (char *)ptr) && (trav < NEXT(ptr))) trav = ptr; //change trav if pointing to coalesced block
+
+    return ptr;
 }
 
 /* 
