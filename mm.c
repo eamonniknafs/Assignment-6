@@ -62,9 +62,6 @@ team_t team = {
 #define NEXT(ptr) ((char *)(ptr) + GET_SIZE(((char *)(ptr) - HFSIZE)))
 #define PREV(ptr) ((char *)(ptr) - GET_SIZE(((char *)(ptr) - DWORD)))
 
-/* keeps max value between x and y */
-#define MAX(x, y) ((x) > (y)? (x) : (y))
-
 /* Global variables */  
 static char *heapL = 0; //ptr to first block
 static char *trav; //trav for next fit
@@ -101,12 +98,11 @@ static void *coalesce(void *ptr)
     }
 
     /* if neither is */
-    else {
-        size += GET_SIZE(HEAD(PREV(ptr))) + 
-            GET_SIZE(FOOT(NEXT(ptr)));
-        WRITE(HEAD(PREV(ptr)), HF(size, 0));
-        WRITE(HEAD(NEXT(ptr)), HF(size, 0));
-        ptr = PREV(ptr);
+   else{
+       size += GET_SIZE(HEAD(PREV(ptr))) + GET_SIZE(FOOT(NEXT(ptr)));
+       WRITE(HEAD(PREV(ptr)), HF(size, 0));
+       WRITE(FOOT(NEXT(ptr)), HF(size, 0));
+       ptr = PREV(ptr);
     }
    
     if ((trav > (char *)ptr) && (trav < NEXT(ptr))) trav = ptr; //change trav if pointing to coalesced block
@@ -146,45 +142,40 @@ static void *grow_heap(size_t words)
  */
 static void *fit(size_t adj_size)
 {
-    char *last_trav = trav; //next fit
-    /* search from the trav to the end of list */
-    for ( ; GET_SIZE(HEAD(trav)) > 0; trav = NEXT(trav)){
-        if (!GET_ALLOC(HEAD(trav)) && (size <= GET_SIZE(HEAD(trav)))) return trav;
-    }
-    /* search from start of list to last trav */
-    for (trav = heapL; trav < last_trav; trav = NEXT(trav)){
-        if (!GET_ALLOC(HEAD(trav)) && (size <= GET_SIZE(HEAD(trav)))) return trav;
-    }
-    return NULL; //no fit
+    /* Next fit search */
+    char *origtrav = trav;
 
-    // void *ptr; //first fit
+    /* search from  trav to end */
+    for (; GET_SIZE(HEAD(trav)) > 0; trav = NEXT(trav))
+        if (!GET_ALLOC(HEAD(trav)) && (adj_size <= GET_SIZE(HEAD(trav))))
+            return trav;
 
-    // for (ptr = heapL; GET_SIZE(HEAD(ptr)) > 0; ptr = NEXT(ptr)) {
-    //     if (!GET_ALLOC(HEAD(ptr)) && (size <= GET_SIZE(HEAD(ptr)))) {
-    //         return ptr;
-    //     }
-    // }
-    // return NULL; /* No fit */
+    /* search from start to orig trav */
+    for (trav = heapL; trav < origtrav; trav = NEXT(trav))
+        if (!GET_ALLOC(HEAD(trav)) && (adj_size <= GET_SIZE(HEAD(trav))))
+            return trav;
+
+    return NULL;  /* no fit found */
 }
 
 /* 
  * put - Puts size byte block at the free block at ptr, splitting
  * if required.
  */
-static void put(void *ptr, size_t size)
+static void put(void *ptr, size_t adj_size)
 {
-    size_t free_size = GET_SIZE(HEAD(ptr));   
+    size_t csize = GET_SIZE(HEAD(ptr));   
 
-    if ((free_size - size) >= (2*DWORD)) { 
-        WRITE(HEAD(ptr), HF(size, 1));
-        WRITE(FOOT(ptr), HF(size, 1));
+    if ((csize - adj_size) >= (2*DWORD)) { 
+        WRITE(HEAD(ptr), HF(adj_size, 1));
+        WRITE(FOOT(ptr), HF(adj_size, 1));
         ptr = NEXT(ptr);
-        WRITE(HEAD(ptr), HF(free_size-size, 0));
-        WRITE(FOOT(ptr), HF(free_size-size, 0));
+        WRITE(HEAD(ptr), HF(csize-adj_size, 0));
+        WRITE(FOOT(ptr), HF(csize-adj_size, 0));
     }
     else { 
-        WRITE(HEAD(ptr), HF(free_size, 1));
-        WRITE(FOOT(ptr), HF(free_size, 1));
+        WRITE(HEAD(ptr), HF(csize, 1));
+        WRITE(FOOT(ptr), HF(csize, 1));
     }
 }
 
@@ -199,13 +190,14 @@ static void put(void *ptr, size_t size)
 int mm_init(void)
 {   
     /* Create the initial free heap list */
-    heapL = mem_sbrk(2*DWORD);
-    if (heapL == (void *)-1) return -1;
+    if ((heapL = mem_sbrk(4*HFSIZE)) == (void *)-1) return -1;
     WRITE(heapL, 0); //padding
     WRITE(heapL + (1*HFSIZE), HF(DWORD, 1)); //start header
     WRITE(heapL + (2*HFSIZE), HF(DWORD, 1)); //start footer
     WRITE(heapL + (3*HFSIZE), HF(0, 1)); //end header 
     heapL += (2*HFSIZE); //move heapL pointer after start header/footer
+
+    trav = heapL; //set trav to point to heap
 
     /* Extend the empty heap list CHUNKSIZE bytes */
     if (grow_heap(CHUNKSIZE/HFSIZE) == NULL) return -1;
@@ -235,7 +227,7 @@ void *mm_malloc(size_t size)
         return ptr;
     }
     /* only runs of no fit */
-    growsize = MAX(adj_size,CHUNKSIZE); //grows heap by CHUNKSIZE or block size, whichever is larger
+    growsize = ((adj_size) > (CHUNKSIZE) ? (adj_size) : (CHUNKSIZE)); //grows heap by CHUNKSIZE or block size, whichever is larger
     if ((ptr = grow_heap(growsize/HFSIZE)) == NULL) return NULL;
     put(ptr, adj_size); //puts block
     return ptr;
@@ -265,8 +257,6 @@ void mm_free(void *ptr)
  */
 void *mm_realloc(void *ptr, size_t size)
 {
-    return 0;
 }
-
 
 //Used example in CSAPP chapter 9.9 for reference.
