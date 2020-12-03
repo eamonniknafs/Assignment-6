@@ -48,7 +48,7 @@ team_t team = {
 #define READ(a) (*(unsigned int *)(a))
 #define WRITE(a, val) (*(unsigned int *)(a) = (val))
 
-/* Read the size and allocation status of block at address a */
+/* Read the size and allocation status of header/footer block at address a */
 #define GET_SIZE(a) (READ(a) & ~0x7)
 #define GET_ALLOC(a) (READ(a) & 0x1)
 
@@ -68,9 +68,25 @@ team_t team = {
 
 /* 
  * mm_init - initialize the malloc package.
+ *  - creates a free heap list of size 16 bytes
+ *  - adds a start header/footer
+ *  - adds an end header
+ *  - moves the pointer to the start of the free space
+ *  - extends the heap by CHUNKSIZE bytes
  */
 int mm_init(void)
 {   
+    /* Create the initial free heap list */
+    heapL = mem_sbrk(2*DWORD);
+    if (heapL == (void *)-1) return -1;
+    WRITE(heapL, 0); //padding
+    WRITE(heapL + (1*HFSIZE), HF(DWORD, 1)); //start header
+    WRITE(heapL + (2*HFSIZE), HF(DWORD, 1)); //start footer
+    WRITE(heapL + (3*HFSIZE), HF(0, 1)); //end header 
+    heapL += (2*HFSIZE); //move heapL pointer after start header/footer
+
+    /* Extend the empty heap list CHUNKSIZE bytes */
+    if (grow_heap(CHUNKSIZE/HFSIZE) == NULL) return -1;
     return 0;
 }
 
@@ -115,6 +131,28 @@ void *mm_realloc(void *ptr, size_t size)
     memcpy(newptr, oldptr, copySize);
     mm_free(oldptr);
     return newptr;
+}
+
+/* 
+ * *grow_heap - grows the heap size.
+ *  - ensures alignment
+ *  - adds header/footer for new free block
+ *  - moves end header to the end of the grown heap
+ *  - coalesces
+ */
+static void *grow_heap(size_t size) 
+{
+    if(size % 2) words++; //ensure size is even (to maintain alignment)
+
+    char *ptr = mem_sbrk(size); //set pointer to start of grown block
+    if ((long)ptr == -1)  return NULL;
+
+    /* Initialize new block's header/footer and end header */
+    PUT(HEAD(ptr), HF(size*HFSIZE, 0));
+    PUT(FOOT(ptr), HF(size*HFSIZE, 0));
+    PUT(HEAD(NEXT(ptr)), HF(0, 1)); //new end header
+
+    //return coalesce(ptr);  TO BE IMPLEMENTED
 }
 
 //Used example in CSAPP chapter 9.9 for reference.
