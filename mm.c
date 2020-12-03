@@ -144,27 +144,27 @@ static void *grow_heap(size_t words)
  * - next, it traverses the first half
  * - if still no fit, returns NULL, if any then returns pointer to start of fit
  */
-static void *fit(size_t size)
+static void *fit(size_t adj_size)
 {
-    // char *last_trav = trav; //next fit
-    // /* search from the trav to the end of list */
-    // for (; GET_SIZE(HEAD(trav)) > 0; trav = NEXT(trav)){
-    //     if (!GET_ALLOC(HEAD(trav)) && (size <= GET_SIZE(HEAD(trav)))) return trav;
-    // }
-    // /* search from start of list to last trav */
-    // for (trav = heapL; trav < last_trav; trav = NEXT(trav)){
-    //     if (!GET_ALLOC(HEAD(trav)) && (size <= GET_SIZE(HEAD(trav)))) return trav;
-    // }
-    // return NULL; //no fit
-
-    void *ptr; //first fit
-
-    for (ptr = heapL; GET_SIZE(HEAD(ptr)) > 0; ptr = NEXT(ptr)) {
-        if (!GET_ALLOC(HEAD(ptr)) && (size <= GET_SIZE(HEAD(ptr)))) {
-            return ptr;
-        }
+    char *last_trav = trav; //next fit
+    /* search from the trav to the end of list */
+    for ( ; GET_SIZE(HEAD(trav)) > 0; trav = NEXT(trav)){
+        if (!GET_ALLOC(HEAD(trav)) && (size <= GET_SIZE(HEAD(trav)))) return trav;
     }
-    return NULL; /* No fit */
+    /* search from start of list to last trav */
+    for (trav = heapL; trav < last_trav; trav = NEXT(trav)){
+        if (!GET_ALLOC(HEAD(trav)) && (size <= GET_SIZE(HEAD(trav)))) return trav;
+    }
+    return NULL; //no fit
+
+    // void *ptr; //first fit
+
+    // for (ptr = heapL; GET_SIZE(HEAD(ptr)) > 0; ptr = NEXT(ptr)) {
+    //     if (!GET_ALLOC(HEAD(ptr)) && (size <= GET_SIZE(HEAD(ptr)))) {
+    //         return ptr;
+    //     }
+    // }
+    // return NULL; /* No fit */
 }
 
 /* 
