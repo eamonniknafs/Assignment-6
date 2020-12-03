@@ -253,10 +253,40 @@ void mm_free(void *ptr)
 }
 
 /*
- * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
+ * mm_realloc - reallocates the given area of memory, originally allocated by mm_malloc
  */
 void *mm_realloc(void *ptr, size_t size)
 {
+    size_t oldsize;
+    void *newptr;
+
+    /* Handles instance where size = 0, just frees */
+    if(size == 0) {
+        mm_free(ptr);
+        return 0;
+    }
+
+    /* If old ptr is null, it's just malloc */
+    if(ptr == NULL) {
+        return mm_malloc(size);
+    }
+
+    newptr = mm_malloc(size);
+
+    /* If realloc() fails return NULL  */
+    if(!newptr) {
+        return 0;
+    }
+
+    /* Copies old data. */
+    oldsize = GET_SIZE(HEAD(ptr));
+    if(size < oldsize) oldsize = size;
+    memcpy(newptr, ptr, oldsize);
+
+    /* Frees old block. */
+    mm_free(ptr);
+
+    return newptr;
 }
 
 //Used example in CSAPP chapter 9.9 for reference.
