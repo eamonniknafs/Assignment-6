@@ -124,11 +124,11 @@ static void *coalesce(void *ptr)
 static void *grow_heap(size_t words) 
 {
     size_t size;
-    char *ptr = mem_sbrk(size); //set pointer to start of grown block
-    if ((long)ptr == -1) return NULL;
-
     size = (words % 2) ? (words+1) * HFSIZE : words * HFSIZE;
 
+    char *ptr = mem_sbrk(size); //set pointer to start of grown block
+    if ((long)ptr == -1) return NULL;
+    
     /* Initialize new block's header/footer and end header */
     WRITE(HEAD(ptr), HF(size, 0));
     WRITE(FOOT(ptr), HF(size, 0));
