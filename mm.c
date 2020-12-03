@@ -60,9 +60,12 @@ team_t team = {
 #define NEXT(ptr) ((char *)(ptr) + GET_SIZE(((char *)(ptr) - HFSIZE)))
 #define PREV(ptr) ((char *)(ptr) - GET_SIZE(((char *)(ptr) - DWORD)))
 
+/* rounds up to the nearest multiple of ALIGNMENT */
+#define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
+
+static char *trav; //trav for next fit
+
 /************************
-// /* rounds up to the nearest multiple of ALIGNMENT */
-// #define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
 // #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 /************************
 
@@ -91,18 +94,26 @@ int mm_init(void)
 }
 
 /* 
- * mm_malloc - Allocate a block by incrementing the brk pointer.
- *     Always allocate a block whose size is a multiple of the alignment.
+ * mm_malloc - Allocate a block of (at least) size bytes
+ * - searches for fit of size bytes
+ * - if found, puts the block
+ * - if not found, grows heap then puts the block
  */
 void *mm_malloc(size_t size)
 {
-    int newsize = ALIGN(size + SIZE_T_SIZE);
-    void *p = mem_sbrk(newsize);
-    if (p == (void *)-1)
-	return NULL;
-    else {
-        *(size_t *)p = size;
-        return (void *)((char *)p + SIZE_T_SIZE);
+    if (heapL == 0) mm_init(); //if no heap list, init
+    if (size == 0) return NULL; //if request is useless, return NULL
+    ptr = fit(ALIGN(size));
+    if (ptr != NULL){ //if fit
+        put(ptr, ALIGN(size)); //puts block
+        return ptr;
+    }
+    else //only runs of no fit
+    {
+        growsize = (ALIGN(size)>CHUNKSIZE) ? ALIGN(size) : CHUNKSIZE; //grows heap by CHUNKSIZE or block size, whichever is larger
+        if ((ptr = grow_heap(growsize/HFSIZE)) == NULL) return NULL;
+        put(ptr, ALIGN(size)); //puts block
+        return ptr;
     }
 }
 
@@ -142,17 +153,56 @@ void *mm_realloc(void *ptr, size_t size)
  */
 static void *grow_heap(size_t size) 
 {
-    if(size % 2) words++; //ensure size is even (to maintain alignment)
-
     char *ptr = mem_sbrk(size); //set pointer to start of grown block
     if ((long)ptr == -1)  return NULL;
 
     /* Initialize new block's header/footer and end header */
-    PUT(HEAD(ptr), HF(size*HFSIZE, 0));
-    PUT(FOOT(ptr), HF(size*HFSIZE, 0));
+    PUT(HEAD(ptr), HF(ALLIGN(size)*HFSIZE, 0));
+    PUT(FOOT(ptr), HF(ALLIGN(size)*HFSIZE, 0));
     PUT(HEAD(NEXT(ptr)), HF(0, 1)); //new end header
 
     //return coalesce(ptr);  TO BE IMPLEMENTED
 }
 
+/* 
+ * fit - Find a fit for a block with size bytes
+ * - uses next fit method to search for a fit
+ * - first traverses the next part of the heap (not already traversed)
+ * - next, it traverses the first half
+ * - if still no fit, returns NULL, if any then returns pointer to start of fit
+ */
+static void *fit(size_t size)
+{
+    char *last_trav = trav; //next fit
+    /* search from the trav to the end of list */
+    for (; GET_SIZE(HEAD(trav)) > 0; trav = NEXT(trav)){
+        if (!GET_ALLOC(HEAD(trav)) && (size <= GET_SIZE(HEAD(trav)))) return trav;
+    }
+    /* search from start of list to last trav */
+    for (trav = heapL; trav < last_trav; rover = NEXT(trav)){
+        if (!GET_ALLOC(HEAD(trav)) && (size <= GET_SIZE(HEAD(trav)))) return trav;
+    }
+    return NULL; //no fit
+}
+
+/* 
+ * put - Puts size byte block at the free block at ptr, splitting
+ * if required.
+ */
+static void put(void *ptr, size_t size)
+{
+    size_t free_size = GET_SIZE(HEAD(ptr));   
+
+    if ((free_size - size) >= (2*DWORD)) { 
+        WRITE(HEAD(ptr), HF(size, 1));
+        WRITE(FOOT(ptr), HF(size, 1));
+        ptr = NEXT(ptr);
+        WRITE(HEAD(ptr), HF(free_size-size, 0));
+        WRITE(FOOT(ptr), HF(free_size-size, 0));
+    }
+    else { 
+        WRITE(HEAD(ptr), HF(free_size, 1));
+        WRITE(FOOT(ptr), HF(free_size, 1));
+    }
+}
 //Used example in CSAPP chapter 9.9 for reference.
