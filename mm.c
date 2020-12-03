@@ -62,8 +62,8 @@ team_t team = {
 #define NEXT(ptr) ((char *)(ptr) + GET_SIZE(((char *)(ptr) - HFSIZE)))
 #define PREV(ptr) ((char *)(ptr) - GET_SIZE(((char *)(ptr) - DWORD)))
 
-/* rounds up to the nearest multiple of ALIGNMENT */
-#define ALIGN(size) (((size) + (DWORD-1)) & ~0x7)
+/* keeps max value between x and y */
+#define MAX(x, y) ((x) > (y)? (x) : (y))
 
 /* Global variables */  
 static char *heapL = 0; //ptr to first block
@@ -121,14 +121,17 @@ static void *coalesce(void *ptr)
  *  - moves end header to the end of the grown heap
  *  - coalesces
  */
-static void *grow_heap(size_t size) 
+static void *grow_heap(size_t words) 
 {
+    size_t size;
     char *ptr = mem_sbrk(size); //set pointer to start of grown block
-    if ((long)ptr == -1)  return NULL;
+    if ((long)ptr == -1) return NULL;
+
+    size = (words % 2) ? (words+1) * HFSIZE : words * HFSIZE;
 
     /* Initialize new block's header/footer and end header */
-    WRITE(HEAD(ptr), HF(ALIGN(size)*HFSIZE, 0));
-    WRITE(FOOT(ptr), HF(ALIGN(size)*HFSIZE, 0));
+    WRITE(HEAD(ptr), HF(size, 0));
+    WRITE(FOOT(ptr), HF(size, 0));
     WRITE(HEAD(NEXT(ptr)), HF(0, 1)); //new end header
 
     return coalesce(ptr);
@@ -143,16 +146,25 @@ static void *grow_heap(size_t size)
  */
 static void *fit(size_t size)
 {
-    char *last_trav = trav; //next fit
-    /* search from the trav to the end of list */
-    for (; GET_SIZE(HEAD(trav)) > 0; trav = NEXT(trav)){
-        if (!GET_ALLOC(HEAD(trav)) && (size <= GET_SIZE(HEAD(trav)))) return trav;
+    // char *last_trav = trav; //next fit
+    // /* search from the trav to the end of list */
+    // for (; GET_SIZE(HEAD(trav)) > 0; trav = NEXT(trav)){
+    //     if (!GET_ALLOC(HEAD(trav)) && (size <= GET_SIZE(HEAD(trav)))) return trav;
+    // }
+    // /* search from start of list to last trav */
+    // for (trav = heapL; trav < last_trav; trav = NEXT(trav)){
+    //     if (!GET_ALLOC(HEAD(trav)) && (size <= GET_SIZE(HEAD(trav)))) return trav;
+    // }
+    // return NULL; //no fit
+
+    void *ptr; //first fit
+
+    for (ptr = heapL; GET_SIZE(HEAD(ptr)) > 0; ptr = NEXT(ptr)) {
+        if (!GET_ALLOC(HEAD(ptr)) && (size <= GET_SIZE(HEAD(ptr)))) {
+            return ptr;
+        }
     }
-    /* search from start of list to last trav */
-    for (trav = heapL; trav < last_trav; trav = NEXT(trav)){
-        if (!GET_ALLOC(HEAD(trav)) && (size <= GET_SIZE(HEAD(trav)))) return trav;
-    }
-    return NULL; //no fit
+    return NULL; /* No fit */
 }
 
 /* 
@@ -209,22 +221,24 @@ int mm_init(void)
 void *mm_malloc(size_t size)
 {
     char *ptr;
-    size_t growsize;
+    size_t adj_size //adjusted block size
+    size_t growsize; //amount to grow heap, if required
 
     if (heapL == 0) mm_init(); //if no heap list, init
     if (size == 0) return NULL; //if request is useless, return NULL
-    ptr = fit(ALIGN(size));
-    if (ptr != NULL){ //if fit
-        put(ptr, ALIGN(size)); //puts block
+
+    if (size <= DWORD) adj_size = 2*DWORD;
+    else adj_size = DWORD * ((size + (DWORD) + (DWORD-1)) / DWORD);
+
+    if ((ptr = fit(adj_size)) != NULL){ //if fit
+        put(ptr, adj_size); //puts block
         return ptr;
     }
-    else //only runs of no fit
-    {
-        growsize = (ALIGN(size)>CHUNKSIZE) ? ALIGN(size) : CHUNKSIZE; //grows heap by CHUNKSIZE or block size, whichever is larger
-        if ((ptr = grow_heap(growsize/HFSIZE)) == NULL) return NULL;
-        put(ptr, ALIGN(size)); //puts block
-        return ptr;
-    }
+    /* only runs of no fit */
+    growsize = MAX(adj_size,CHUNKSIZE); //grows heap by CHUNKSIZE or block size, whichever is larger
+    if ((ptr = grow_heap(growsize/HFSIZE)) == NULL) return NULL;
+    put(ptr, adj_size); //puts block
+    return ptr;
 }
 
 /*
