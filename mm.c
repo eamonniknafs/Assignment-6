@@ -221,7 +221,7 @@ int mm_init(void)
 void *mm_malloc(size_t size)
 {
     char *ptr;
-    size_t adj_size //adjusted block size
+    size_t adj_size; //adjusted block size
     size_t growsize; //amount to grow heap, if required
 
     if (heapL == 0) mm_init(); //if no heap list, init
