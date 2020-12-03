@@ -1,13 +1,14 @@
 /*
- * mm-naive.c - The fastest, least memory-efficient malloc package.
+ * mm.c - An efficient and simple malloc package using a bidirectional
+ * implicit list.
  * 
- * In this naive approach, a block is allocated by simply incrementing
- * the brk pointer.  A block is pure payload. There are no headers or
- * footers.  Blocks are never coalesced or reused. Realloc is
- * implemented directly using mm_malloc and mm_free.
+ * In this implementation of malloc, an implicit heap list is made where each 
+ * block has both a header an a footer, allowing for bidirectional traversal.
+ * This implementation uses next fit to find a free block, in which the list is
+ * searched where the previous search finished, allowing for faster fits.
  *
- * NOTE TO STUDENTS: Replace this header comment with your own header
- * comment that gives a high level description of your solution.
+ * NOTE: This code was largely inspired by the example at the end of 
+ * chapter 9.9 of the CSAPP textbook.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -288,5 +289,3 @@ void *mm_realloc(void *ptr, size_t size)
 
     return newptr;
 }
-
-//Used example in CSAPP chapter 9.9 for reference.
